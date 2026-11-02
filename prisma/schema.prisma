@@ -1,0 +1,216 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+}
+
+// ======================
+// ENUMS
+// ======================
+
+enum Role {
+  ADMIN
+  LANDLORD
+  TENANT
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  COMMERCIAL
+  OTHER
+}
+
+enum UnitStatus {
+  VACANT
+  OCCUPIED
+  MAINTENANCE
+}
+
+enum LeaseStatus {
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  PENDING
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  MOBILE_MONEY
+  CARD
+  OTHER
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ======================
+// MODELS
+// ======================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          Role     @default(TENANT)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  properties    Property[]      @relation("LandlordProperties")
+  leases        Lease[]         @relation("TenantLeases")
+  maintenanceRequests MaintenanceRequest[] @relation("TenantMaintenance")
+  payments      Payment[]
+
+  @@map("users")
+}
+
+model Property {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  address     String
+  city        String
+  state       String?
+  country     String       @default("Kenya")
+  zipCode     String?
+  type        PropertyType @default(APARTMENT)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  landlordId  String
+  landlord    User         @relation("LandlordProperties", fields: [landlordId], references: [id])
+  units       Unit[]
+
+  @@map("properties")
+}
+
+model Unit {
+  id          String     @id @default(cuid())
+  unitNumber  String
+  floor       Int?
+  bedrooms    Int        @default(1)
+  bathrooms   Float      @default(1)
+  sizeSqm     Float?
+  rentAmount  Decimal    @db.Decimal(10, 2)
+  status      UnitStatus @default(VACANT)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  propertyId  String
+  property    Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases      Lease[]
+
+  @@unique([propertyId, unitNumber])
+  @@map("units")
+}
+
+model Lease {
+  id              String      @id @default(cuid())
+  startDate       DateTime
+  endDate         DateTime
+  rentAmount      Decimal     @db.Decimal(10, 2)
+  depositAmount   Decimal?    @db.Decimal(10, 2)
+  status          LeaseStatus @default(PENDING)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  unitId          String
+  unit            Unit        @relation(fields: [unitId], references: [id])
+  tenantId        String
+  tenant          User        @relation("TenantLeases", fields: [tenantId], references: [id])
+  invoices        Invoice[]
+  maintenanceRequests MaintenanceRequest[]
+
+  @@map("leases")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  amount        Decimal       @db.Decimal(10, 2)
+  dueDate       DateTime
+  status        InvoiceStatus @default(PENDING)
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  leaseId       String
+  lease         Lease         @relation(fields: [leaseId], references: [id])
+  payments      Payment[]
+
+  @@map("invoices")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  amount        Decimal       @db.Decimal(10, 2)
+  paymentDate   DateTime      @default(now())
+  method        PaymentMethod @default(OTHER)
+  reference     String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  invoiceId     String
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
+  paidById      String
+  paidBy        User          @relation(fields: [paidById], references: [id])
+
+  @@map("payments")
+}
+
+model MaintenanceRequest {
+  id          String              @id @default(cuid())
+  title       String
+  description String
+  priority    MaintenancePriority @default(MEDIUM)
+  status      MaintenanceStatus   @default(OPEN)
+  resolvedAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relations
+  leaseId     String
+  lease       Lease               @relation(fields: [leaseId], references: [id])
+  tenantId    String
+  tenant      User                @relation("TenantMaintenance", fields: [tenantId], references: [id])
+
+  @@map("maintenance_requests")
+}
